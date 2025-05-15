@@ -1,0 +1,33 @@
+name: Trivy Scan and Build
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  scan_and_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: '.'
+
+      - name: Build Docker Image
+        run: docker build -t your-dockerhub-username/waas-api:latest .
+
+      - name: Run Trivy Image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          scan-ref: your-dockerhub-username/waas-api:latest
+
+      - name: Login to DockerHub
+        run: echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Push Docker Image
+        run: docker push your-dockerhub-username/waas-api:latest
