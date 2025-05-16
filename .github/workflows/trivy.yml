@@ -27,16 +27,16 @@ jobs:
       - name: Convert JSON report to markdown
         run: |
           echo "# Trivy Scan Report" > summary.md
-          if jq '.Results | length' summary.json | grep -q '^0$'; then
+          if jq '.Results | length == 0' summary.json; then
             echo "No vulnerabilities found." >> summary.md
           else
             jq -r '
               .Results[] |
               "### Target: \(.Target)\n" +
-              (if (.Vulnerabilities // []) | length == 0 then
+              (if .Vulnerabilities == null or (.Vulnerabilities | length == 0) then
                 "No vulnerabilities found.\n"
               else
-                (.Vulnerabilities // [])[] | "- \(.Severity): \(.PkgName) \(.InstalledVersion) → \(.FixedVersion // "None") - \(.Title)"
+                (.Vulnerabilities[] | "- \(.Severity): \(.PkgName) \(.InstalledVersion) → \(.FixedVersion // "None") - \(.Title)") + "\n"
               end)
             ' summary.json >> summary.md
           fi
@@ -47,5 +47,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          echo "$GH_TOKEN" | gh auth login --with-token
+          gh auth login --with-token <<< "$GH_TOKEN"
           gh pr comment $PR_NUMBER --body-file summary.md
