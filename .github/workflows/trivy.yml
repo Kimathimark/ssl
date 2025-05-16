@@ -1,6 +1,8 @@
 name: Trivy Scan
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -9,39 +11,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Install Trivy
-      run: |
-        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-    - name: Run Trivy config scan
-      run: trivy config . --format json --output trivy-results.json
+      - name: Run Trivy filesystem scan
+        run: trivy fs --exit-code 1 --severity HIGH,CRITICAL .
 
-    - name: Install jq and GitHub CLI
-      run: |
-        sudo apt-get update && sudo apt-get install -y jq gh
+      - name: Save Trivy report
+        run: trivy fs --format json --output summary.json .
 
-    - name: Generate Markdown Summary
-      run: |
-        echo "## 🔍 Trivy Vulnerabilities Summary" > summary.md
-        echo "" >> summary.md
+      - name: Convert JSON report to markdown
+        run: |
+          # Convert summary.json to summary.md (example using jq)
+          echo "# Trivy Scan Report" > summary.md
+          jq '.Results[] | {Target, Vulnerabilities}' summary.json >> summary.md
 
-        jq -r '
-          if .Results then
-            .Results[] |
-              select(.Vulnerabilities) |
-              "\n**Target: \(.Target)**\n" +
-              ( .Vulnerabilities[] |
-                "- **\(.VulnerabilityID)**: \(.PkgName) (\(.Severity)) - \(.Title)" )
-          else
-            "**No vulnerabilities found.**"
-          end
-        ' trivy-results.json >> summary.md
-
-    - name: Post PR Comment
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        gh pr comment ${{ github.event.pull_request.number }} --body "$(cat summary.md)"
+      - name: Comment Trivy report on PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh auth login --with-token <<< "$GH_TOKEN"
+          gh pr comment $PR_NUMBER --body "$(cat summary.md)"
