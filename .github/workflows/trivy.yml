@@ -21,18 +21,18 @@ jobs:
       - name: Run Trivy filesystem scan
         run: trivy fs --exit-code 1 --severity HIGH,CRITICAL .
 
-      - name: Save Trivy report
+      - name: Save Trivy JSON report
         run: trivy fs --format json --output summary.json .
 
-      - name: Convert JSON report to markdown
+      - name: Convert JSON to markdown
         run: |
-          echo "# Trivy Scan Report" > summary.md
-          if jq '.Results | length == 0' summary.json; then
-            echo "No vulnerabilities found." >> summary.md
+          echo "# 🔍 Trivy Scan Report" > summary.md
+          if [ "$(jq '.Results | length' summary.json)" -eq 0 ]; then
+            echo "✅ No vulnerabilities found." >> summary.md
           else
             jq -r '
               .Results[] |
-              "### Target: \(.Target)\n" +
+              "### 🔹 Target: \(.Target)\n" +
               (if .Vulnerabilities == null or (.Vulnerabilities | length == 0) then
                 "No vulnerabilities found.\n"
               else
@@ -41,10 +41,30 @@ jobs:
             ' summary.json >> summary.md
           fi
 
+      - name: Convert JSON to CSV
+        run: |
+          echo "Target,Package,InstalledVersion,FixedVersion,Severity,Title" > summary.csv
+          jq -r '
+            .Results[] |
+            .Target as $target |
+            .Vulnerabilities[]? |
+            [$target, .PkgName, .InstalledVersion, (.FixedVersion // "None"), .Severity, (.Title | gsub("\n"; " "))] |
+            @csv
+          ' summary.json >> summary.csv
+
+      - name: Upload reports as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-scan-reports
+          path: |
+            summary.json
+            summary.md
+            summary.csv
+
       - name: Comment Trivy report on PR
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh pr comment "$PR_NUMBER" --body-file summary.md
+          echo "$GH_TOKEN" | gh auth login --with-token
+          gh pr comment "${{ github.event.pull_request.number }}" --body "$(cat summary.md)"
