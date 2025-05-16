@@ -1,3 +1,31 @@
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: flask-ingress
+#   namespace: trialnamespace
+#   annotations:
+#     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+#     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+#     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+#     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+#     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+# spec:
+#   ingressClassName: nginx
+#   rules:
+#   - host: sample.terrasofthq.com
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: flask-app
+#             port:
+#               number: 5000
+#   tls:
+#   - hosts:
+#       - sample.terrasofthq.com
+#     secretName: tls-secret
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -8,11 +36,11 @@ metadata:
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
-  - host: sample.terrasofthq.com
+  - host: mkimathi.terrasofthq.com
     http:
       paths:
       - path: /
@@ -24,5 +52,5 @@ spec:
               number: 5000
   tls:
   - hosts:
-      - sample.terrasofthq.com
-    secretName: tls-secret
+      - mkimathi.terrasofthq.com
+    secretName: flask-app-tls-secret

@@ -1,33 +1,47 @@
-name: Trivy Scan and Build
+name: Trivy Scan
 
 on:
-  push:
-    branches: [ main ]
+  pull_request:
+    branches: [main]
 
 jobs:
-  scan_and_build:
+  trivy-scan:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: fs
-          scan-ref: '.'
+    - name: Install Trivy
+      run: |
+        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-      - name: Build Docker Image
-        run: docker build -t your-dockerhub-username/waas-api:latest .
+    - name: Run Trivy config scan
+      run: trivy config . --format json --output trivy-results.json
 
-      - name: Run Trivy Image scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: image
-          scan-ref: your-dockerhub-username/waas-api:latest
+    - name: Install jq and GitHub CLI
+      run: |
+        sudo apt-get update && sudo apt-get install -y jq gh
 
-      - name: Login to DockerHub
-        run: echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+    - name: Generate Markdown Summary
+      run: |
+        echo "## 🔍 Trivy Vulnerabilities Summary" > summary.md
+        echo "" >> summary.md
 
-      - name: Push Docker Image
-        run: docker push your-dockerhub-username/waas-api:latest
+        jq -r '
+          if .Results then
+            .Results[] |
+              select(.Vulnerabilities) |
+              "\n**Target: \(.Target)**\n" +
+              ( .Vulnerabilities[] |
+                "- **\(.VulnerabilityID)**: \(.PkgName) (\(.Severity)) - \(.Title)" )
+          else
+            "**No vulnerabilities found.**"
+          end
+        ' trivy-results.json >> summary.md
+
+    - name: Post PR Comment
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh pr comment ${{ github.event.pull_request.number }} --body "$(cat summary.md)"
