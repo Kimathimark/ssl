@@ -33,11 +33,11 @@ jobs:
             jq -r '
               .Results[] |
               "### Target: \(.Target)\n" +
-              (if .Vulnerabilities == null or (.Vulnerabilities | length == 0) then
+              (if (.Vulnerabilities // []) | length == 0 then
                 "No vulnerabilities found.\n"
               else
-                .Vulnerabilities[] | "- \(.Severity): \(.PkgName) \(.InstalledVersion) → \(.FixedVersion // "None") - \(.Title)"
-                end)
+                (.Vulnerabilities // [])[] | "- \(.Severity): \(.PkgName) \(.InstalledVersion) → \(.FixedVersion // "None") - \(.Title)"
+              end)
             ' summary.json >> summary.md
           fi
 
